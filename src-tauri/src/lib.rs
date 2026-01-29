@@ -91,7 +91,9 @@ async fn translate(request: TranslateRequest) -> Result<TranslateResponse, Strin
             .json(&ollama_req)
             .send()
             .await
-            .map_err(|e| format!("Failed to send request: {}", e))?;
+            .map_err(|e| format!("Failed to send request: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("API error: {}", e))?;
 
         let ollama_res: OllamaResponse = response
             .json()
@@ -121,7 +123,9 @@ async fn translate(request: TranslateRequest) -> Result<TranslateResponse, Strin
             .json(&openai_req)
             .send()
             .await
-            .map_err(|e| format!("Failed to send request: {}", e))?;
+            .map_err(|e| format!("Failed to send request: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("API error: {}", e))?;
 
         let openai_res: OpenAIResponse = response
             .json()

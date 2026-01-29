@@ -107,7 +107,6 @@ function App() {
   const handleTranslate = useCallback(async (textToTranslate?: string) => {
     const text = textToTranslate || sourceText;
     if (!text.trim()) return;
-    if (!sourceText.trim()) return;
 
     setIsLoading(true);
     setError(null);
