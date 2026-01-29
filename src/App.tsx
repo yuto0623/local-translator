@@ -1,0 +1,390 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import "./App.css";
+
+interface Settings {
+  provider: "ollama" | "lmstudio";
+  endpoint: string;
+  model: string;
+  targetLang: string;
+}
+
+interface TranslateResponse {
+  translated_text: string;
+  detected_lang: string | null;
+}
+
+const LANGUAGES = [
+  { code: "Japanese", label: "日本語" },
+  { code: "English", label: "English" },
+  { code: "Chinese", label: "中文" },
+  { code: "Korean", label: "한국어" },
+  { code: "French", label: "Français" },
+  { code: "German", label: "Deutsch" },
+  { code: "Spanish", label: "Español" },
+];
+
+const DEFAULT_SETTINGS: Settings = {
+  provider: "ollama",
+  endpoint: "http://localhost:11434",
+  model: "llama3",
+  targetLang: "Japanese",
+};
+
+// Icons as SVG components
+const SettingsIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M12 1v6m0 6v10M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m6 0h10M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/>
+  </svg>
+);
+
+const CloseIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
+
+const PasteIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+
+const CopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+  </svg>
+);
+
+const TranslateIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 8l6 6"/>
+    <path d="M4 14l6-6 2-3"/>
+    <path d="M2 5h12"/>
+    <path d="M7 2v3"/>
+    <path d="M22 22l-5-10-5 10"/>
+    <path d="M14 18h6"/>
+  </svg>
+);
+
+const ChevronIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+
+const ErrorIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c53030" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  </svg>
+);
+
+function App() {
+  const [sourceText, setSourceText] = useState("");
+  const [translatedText, setTranslatedText] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<Settings>(() => {
+    const saved = localStorage.getItem("translator-settings");
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+  });
+
+  // 自動翻訳用のフラグ
+  const pendingTranslateRef = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem("translator-settings", JSON.stringify(settings));
+  }, [settings]);
+
+  const handleTranslate = useCallback(async (textToTranslate?: string) => {
+    const text = textToTranslate || sourceText;
+    if (!text.trim()) return;
+    if (!sourceText.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await invoke<TranslateResponse>("translate", {
+        request: {
+          text: text,
+          source_lang: "auto",
+          target_lang: settings.targetLang,
+          provider: settings.provider,
+          endpoint: settings.endpoint,
+          model: settings.model,
+        },
+      });
+      setTranslatedText(response.translated_text);
+    } catch (e) {
+      setError(e as string);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [sourceText, settings]);
+
+  // ホットキーからの選択テキスト受信と自動翻訳
+  useEffect(() => {
+    const unlisten = listen<string>("translate-selection", (event) => {
+      const text = event.payload;
+      if (text && text.trim()) {
+        setSourceText(text);
+        setShowSettings(false);
+        pendingTranslateRef.current = true;
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // sourceTextが更新されたら自動翻訳を実行
+  useEffect(() => {
+    if (pendingTranslateRef.current && sourceText.trim()) {
+      pendingTranslateRef.current = false;
+      handleTranslate(sourceText);
+    }
+  }, [sourceText, handleTranslate]);
+
+  const handlePaste = async () => {
+    try {
+      const text = await invoke<string>("get_clipboard_text");
+      setSourceText(text);
+    } catch (e) {
+      setError("クリップボードの読み取りに失敗しました");
+    }
+  };
+
+  const handleCopy = async () => {
+    try {
+      await invoke("set_clipboard_text", { text: translatedText });
+    } catch (e) {
+      setError("クリップボードへのコピーに失敗しました");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      handleTranslate();
+    }
+  };
+
+  // Settings Page
+  if (showSettings) {
+    return (
+      <div className="neu-settings">
+        <div className="neu-settings-container">
+          <header className="neu-settings-header">
+            <h1 className="neu-settings-title">Settings</h1>
+            <button
+              onClick={() => setShowSettings(false)}
+              className="neu-close-btn"
+              aria-label="Close settings"
+            >
+              <CloseIcon />
+            </button>
+          </header>
+
+          <div className="neu-card">
+            <div className="neu-form-group">
+              <label className="neu-form-label">AI Provider</label>
+              <div className="neu-form-select-wrapper">
+                <select
+                  value={settings.provider}
+                  onChange={(e) => {
+                    const provider = e.target.value as "ollama" | "lmstudio";
+                    setSettings({
+                      ...settings,
+                      provider,
+                      endpoint: provider === "ollama" ? "http://localhost:11434" : "http://localhost:1234",
+                    });
+                  }}
+                  className="neu-form-select"
+                >
+                  <option value="ollama">Ollama</option>
+                  <option value="lmstudio">LM Studio</option>
+                </select>
+                <span className="neu-form-select-arrow"><ChevronIcon /></span>
+              </div>
+            </div>
+
+            <div className="neu-form-group">
+              <label className="neu-form-label">Endpoint</label>
+              <input
+                type="text"
+                value={settings.endpoint}
+                onChange={(e) => setSettings({ ...settings, endpoint: e.target.value })}
+                className="neu-input"
+              />
+            </div>
+
+            <div className="neu-form-group">
+              <label className="neu-form-label">Model</label>
+              <input
+                type="text"
+                value={settings.model}
+                onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+                placeholder={settings.provider === "ollama" ? "llama3" : "local-model"}
+                className="neu-input"
+              />
+            </div>
+
+            <div className="neu-form-group">
+              <label className="neu-form-label">Default Target Language</label>
+              <div className="neu-form-select-wrapper">
+                <select
+                  value={settings.targetLang}
+                  onChange={(e) => setSettings({ ...settings, targetLang: e.target.value })}
+                  className="neu-form-select"
+                >
+                  {LANGUAGES.map((lang) => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="neu-form-select-arrow"><ChevronIcon /></span>
+              </div>
+            </div>
+          </div>
+
+          <div className="neu-hint">
+            <p className="neu-hint-title">Hotkey</p>
+            <p className="neu-hint-text">Ctrl + Shift + T</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main Page
+  return (
+    <div className="neu-app">
+      <div className="neu-container">
+        {/* Header */}
+        <header className="neu-header">
+          <div className="neu-logo">
+            <div className="neu-logo-icon">
+              <TranslateIcon />
+            </div>
+            <span className="neu-logo-text">Translator</span>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="neu-settings-btn"
+            aria-label="Settings"
+          >
+            <SettingsIcon />
+          </button>
+        </header>
+
+        {/* Source Input Card */}
+        <div className="neu-card">
+          <div className="neu-card-header">
+            <span className="neu-card-label">Input</span>
+            <button onClick={handlePaste} className="neu-card-action">
+              <PasteIcon />
+              Paste
+            </button>
+          </div>
+          <textarea
+            value={sourceText}
+            onChange={(e) => setSourceText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Enter text to translate..."
+            className="neu-textarea"
+          />
+        </div>
+
+        {/* Actions */}
+        <div className="neu-actions">
+          <div className="neu-select-wrapper">
+            <select
+              value={settings.targetLang}
+              onChange={(e) => setSettings({ ...settings, targetLang: e.target.value })}
+              className="neu-select"
+            >
+              {LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+            <span className="neu-select-arrow"><ChevronIcon /></span>
+          </div>
+          <button
+            onClick={handleTranslate}
+            disabled={isLoading || !sourceText.trim()}
+            className="neu-btn-primary"
+          >
+            {isLoading ? (
+              <span className="neu-loading">
+                <span className="neu-loading-dots">
+                  <span className="neu-loading-dot"></span>
+                  <span className="neu-loading-dot"></span>
+                  <span className="neu-loading-dot"></span>
+                </span>
+                Translating
+              </span>
+            ) : (
+              <>
+                <TranslateIcon />
+                Translate
+                <span className="neu-btn-shortcut">Ctrl+Enter</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="neu-error">
+            <div className="neu-error-icon">
+              <ErrorIcon />
+            </div>
+            {error}
+          </div>
+        )}
+
+        {/* Result Card */}
+        <div className="neu-card">
+          <div className="neu-card-header">
+            <span className="neu-card-label">Result</span>
+            {translatedText && (
+              <button onClick={handleCopy} className="neu-card-action">
+                <CopyIcon />
+                Copy
+              </button>
+            )}
+          </div>
+          <div className="neu-result">
+            {translatedText || (
+              <span className="neu-result-placeholder">
+                Translation will appear here
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Status */}
+        <footer className="neu-footer">
+          <div className="neu-status">
+            <span className="neu-status-dot"></span>
+            {settings.provider === "ollama" ? "Ollama" : "LM Studio"} · {settings.model}
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+export default App;
