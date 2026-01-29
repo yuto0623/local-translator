@@ -321,7 +321,7 @@ function App() {
             <span className="neu-select-arrow"><ChevronIcon /></span>
           </div>
           <button
-            onClick={handleTranslate}
+            onClick={() => handleTranslate()}
             disabled={isLoading || !sourceText.trim()}
             className="neu-btn-primary"
           >
