@@ -1,3 +1,5 @@
+use std::sync::Mutex;
+
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -5,6 +7,8 @@ use tauri::{
     Emitter, Manager, WebviewWindow,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
+
+struct CurrentShortcut(Mutex<Option<Shortcut>>);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TranslateRequest {
@@ -161,6 +165,145 @@ async fn set_clipboard_text(app: tauri::AppHandle, text: String) -> Result<(), S
         .map_err(|e| format!("Failed to write clipboard: {}", e))
 }
 
+fn parse_shortcut(shortcut_str: &str) -> Result<Shortcut, String> {
+    let parts: Vec<&str> = shortcut_str.split('+').collect();
+    if parts.is_empty() {
+        return Err("Empty shortcut string".to_string());
+    }
+
+    let mut modifiers = Modifiers::empty();
+    let key_str = parts.last().unwrap().trim();
+
+    for part in &parts[..parts.len() - 1] {
+        match part.trim().to_lowercase().as_str() {
+            "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
+            "shift" => modifiers |= Modifiers::SHIFT,
+            "alt" => modifiers |= Modifiers::ALT,
+            "super" | "win" | "meta" => modifiers |= Modifiers::SUPER,
+            _ => return Err(format!("Unknown modifier: {}", part)),
+        }
+    }
+
+    let code = match key_str.to_uppercase().as_str() {
+        "A" => Code::KeyA, "B" => Code::KeyB, "C" => Code::KeyC, "D" => Code::KeyD,
+        "E" => Code::KeyE, "F" => Code::KeyF, "G" => Code::KeyG, "H" => Code::KeyH,
+        "I" => Code::KeyI, "J" => Code::KeyJ, "K" => Code::KeyK, "L" => Code::KeyL,
+        "M" => Code::KeyM, "N" => Code::KeyN, "O" => Code::KeyO, "P" => Code::KeyP,
+        "Q" => Code::KeyQ, "R" => Code::KeyR, "S" => Code::KeyS, "T" => Code::KeyT,
+        "U" => Code::KeyU, "V" => Code::KeyV, "W" => Code::KeyW, "X" => Code::KeyX,
+        "Y" => Code::KeyY, "Z" => Code::KeyZ,
+        "0" => Code::Digit0, "1" => Code::Digit1, "2" => Code::Digit2, "3" => Code::Digit3,
+        "4" => Code::Digit4, "5" => Code::Digit5, "6" => Code::Digit6, "7" => Code::Digit7,
+        "8" => Code::Digit8, "9" => Code::Digit9,
+        "F1" => Code::F1, "F2" => Code::F2, "F3" => Code::F3, "F4" => Code::F4,
+        "F5" => Code::F5, "F6" => Code::F6, "F7" => Code::F7, "F8" => Code::F8,
+        "F9" => Code::F9, "F10" => Code::F10, "F11" => Code::F11, "F12" => Code::F12,
+        "SPACE" => Code::Space, "ENTER" => Code::Enter, "ESCAPE" => Code::Escape,
+        "TAB" => Code::Tab, "BACKSPACE" => Code::Backspace, "DELETE" => Code::Delete,
+        "HOME" => Code::Home, "END" => Code::End,
+        "PAGEUP" => Code::PageUp, "PAGEDOWN" => Code::PageDown,
+        "ARROWUP" => Code::ArrowUp, "ARROWDOWN" => Code::ArrowDown,
+        "ARROWLEFT" => Code::ArrowLeft, "ARROWRIGHT" => Code::ArrowRight,
+        "INSERT" => Code::Insert,
+        _ => return Err(format!("Unknown key: {}", key_str)),
+    };
+
+    let mods = if modifiers.is_empty() { None } else { Some(modifiers) };
+    Ok(Shortcut::new(mods, code))
+}
+
+fn register_translate_shortcut(
+    app_handle: &tauri::AppHandle,
+    shortcut: Shortcut,
+) -> Result<(), String> {
+    let handle = app_handle.clone();
+
+    app_handle
+        .global_shortcut()
+        .on_shortcut(shortcut, move |_app, _shortcut, _event| {
+            let app_handle_inner = handle.clone();
+
+            #[cfg(target_os = "windows")]
+            {
+                use std::process::Command;
+                // モディファイアキーを全てリリースしてからCtrl+Cを送信
+                let _ = Command::new("powershell")
+                    .args(["-Command", r#"
+                        Add-Type @"
+                        using System;
+                        using System.Runtime.InteropServices;
+                        public class KeyHelper {
+                            [DllImport("user32.dll")]
+                            public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+                            public static void ReleaseModifiers() {
+                                uint KEYUP = 0x0002;
+                                keybd_event(0x10, 0, KEYUP, UIntPtr.Zero);
+                                keybd_event(0x11, 0, KEYUP, UIntPtr.Zero);
+                                keybd_event(0x12, 0, KEYUP, UIntPtr.Zero);
+                                keybd_event(0x5B, 0, KEYUP, UIntPtr.Zero);
+                            }
+                            public static void SendCtrlC() {
+                                keybd_event(0x11, 0, 0, UIntPtr.Zero);
+                                keybd_event(0x43, 0, 0, UIntPtr.Zero);
+                                uint KEYUP = 0x0002;
+                                keybd_event(0x43, 0, KEYUP, UIntPtr.Zero);
+                                keybd_event(0x11, 0, KEYUP, UIntPtr.Zero);
+                            }
+                        }
+"@
+                        [KeyHelper]::ReleaseModifiers()
+                        [System.Threading.Thread]::Sleep(50)
+                        [KeyHelper]::SendCtrlC()
+                    "#])
+                    .output();
+            }
+
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if let Some(window) = app_handle_inner.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                    use tauri_plugin_clipboard_manager::ClipboardExt;
+                    if let Ok(text) = app_handle_inner.clipboard().read_text() {
+                        if !text.is_empty() {
+                            let _ = window.emit("translate-selection", text);
+                        }
+                    }
+                }
+            });
+        })
+        .map_err(|e| format!("Failed to register shortcut: {}", e))
+}
+
+#[tauri::command]
+async fn update_shortcut(
+    app: tauri::AppHandle,
+    shortcut: String,
+) -> Result<(), String> {
+    let new_shortcut = parse_shortcut(&shortcut)?;
+
+    // 旧ショートカットを解除
+    {
+        let state = app.state::<CurrentShortcut>();
+        let guard = state.0.lock().unwrap();
+        if let Some(old) = *guard {
+            let _ = app.global_shortcut().unregister(old);
+        }
+    }
+
+    // 新ショートカットを登録
+    register_translate_shortcut(&app, new_shortcut)?;
+
+    // ステートを更新
+    {
+        let state = app.state::<CurrentShortcut>();
+        let mut guard = state.0.lock().unwrap();
+        *guard = Some(new_shortcut);
+    }
+
+    Ok(())
+}
+
 fn toggle_window(window: &WebviewWindow) {
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
@@ -218,52 +361,15 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // グローバルショートカット (Ctrl+Shift+T)
-            let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyT);
-            let app_handle = app.handle().clone();
-
-            app.global_shortcut().on_shortcut(shortcut, move |_app, _shortcut, _event| {
-                let app_handle_inner = app_handle.clone();
-
-                // 選択テキストをコピーするためにCtrl+Cをシミュレート
-                #[cfg(target_os = "windows")]
-                {
-                    use std::process::Command;
-                    // PowerShellでCtrl+Cキーストロークを送信
-                    let _ = Command::new("powershell")
-                        .args(["-Command", r#"
-                            Add-Type -AssemblyName System.Windows.Forms
-                            [System.Windows.Forms.SendKeys]::SendWait('^c')
-                        "#])
-                        .output();
-                }
-
-                // 少し待ってからクリップボードを読み取り
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-
-                    if let Some(window) = app_handle_inner.get_webview_window("main") {
-                        // ウィンドウを表示
-                        let _ = window.show();
-                        let _ = window.set_focus();
-
-                        // クリップボードからテキストを取得してフロントエンドに送信
-                        use tauri_plugin_clipboard_manager::ClipboardExt;
-                        if let Ok(text) = app_handle_inner.clipboard().read_text() {
-                            if !text.is_empty() {
-                                let _ = window.emit("translate-selection", text);
-                            }
-                        }
-                    }
-                });
-            })?;
+            app.manage(CurrentShortcut(Mutex::new(None)));
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             translate,
             get_clipboard_text,
-            set_clipboard_text
+            set_clipboard_text,
+            update_shortcut
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

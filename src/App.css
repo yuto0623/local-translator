@@ -552,6 +552,41 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+.neu-shortcut-capture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: text;
+  outline: none;
+}
+
+.neu-shortcut-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: opacity 0.2s ease;
+}
+
+.neu-shortcut-display:hover {
+  opacity: 0.8;
+}
+
+.neu-shortcut-display:hover .neu-shortcut-edit-hint {
+  opacity: 1;
+}
+
+.neu-shortcut-edit-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
 /* ========================================
    Animations
    ======================================== */

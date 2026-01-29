@@ -8,6 +8,7 @@ interface Settings {
   endpoint: string;
   model: string;
   targetLang: string;
+  shortcut: string;
 }
 
 interface TranslateResponse {
@@ -30,7 +31,29 @@ const DEFAULT_SETTINGS: Settings = {
   endpoint: "http://localhost:11434",
   model: "llama3",
   targetLang: "Japanese",
+  shortcut: "Ctrl+Shift+T",
 };
+
+function mapKeyToShortcutString(code: string): string | null {
+  if (/^Key[A-Z]$/.test(code)) return code.charAt(3);
+  if (/^Digit[0-9]$/.test(code)) return code.charAt(5);
+  if (/^F\d{1,2}$/.test(code)) return code;
+  const specialMap: Record<string, string> = {
+    Space: "Space", Enter: "Enter", Backspace: "Backspace", Tab: "Tab",
+    Escape: "Escape", Delete: "Delete", Home: "Home", End: "End",
+    PageUp: "PageUp", PageDown: "PageDown",
+    ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
+    ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight", Insert: "Insert",
+  };
+  return specialMap[code] || null;
+}
+
+function formatShortcutDisplay(shortcut: string): string {
+  return shortcut.split("+").map((part) => {
+    if (part === "Super") return "Win";
+    return part;
+  }).join(" + ");
+}
 
 // Icons as SVG components
 const SettingsIcon = () => (
@@ -94,8 +117,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => {
     const saved = localStorage.getItem("translator-settings");
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+    return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
   });
+  const [isCapturingShortcut, setIsCapturingShortcut] = useState(false);
 
   // 自動翻訳用のフラグ
   const pendingTranslateRef = useRef(false);
@@ -103,6 +127,48 @@ function App() {
   useEffect(() => {
     localStorage.setItem("translator-settings", JSON.stringify(settings));
   }, [settings]);
+
+  // 起動時にグローバルショートカットを登録
+  useEffect(() => {
+    invoke("update_shortcut", { shortcut: settings.shortcut }).catch((e) =>
+      console.error("Failed to register initial shortcut:", e)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // キャプチャモード中はwindowレベルでキーイベントを監視
+  useEffect(() => {
+    if (!isCapturingShortcut) return;
+
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const modifierKeys = ["Control", "Shift", "Alt", "Meta"];
+      if (modifierKeys.includes(e.key)) return;
+
+      const parts: string[] = [];
+      if (e.ctrlKey) parts.push("Ctrl");
+      if (e.shiftKey) parts.push("Shift");
+      if (e.altKey) parts.push("Alt");
+      if (e.metaKey) parts.push("Super");
+
+      const keyName = mapKeyToShortcutString(e.code);
+      if (!keyName) return;
+
+      parts.push(keyName);
+      const shortcutStr = parts.join("+");
+
+      setIsCapturingShortcut(false);
+
+      invoke("update_shortcut", { shortcut: shortcutStr })
+        .then(() => setSettings((prev) => ({ ...prev, shortcut: shortcutStr })))
+        .catch((err) => setError(`ショートカットの設定に失敗しました: ${err}`));
+    };
+
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [isCapturingShortcut]);
 
   const handleTranslate = useCallback(async (textToTranslate?: string) => {
     const text = textToTranslate || sourceText;
@@ -258,7 +324,23 @@ function App() {
 
           <div className="neu-hint">
             <p className="neu-hint-title">Hotkey</p>
-            <p className="neu-hint-text">Ctrl + Shift + T</p>
+            {isCapturingShortcut ? (
+              <div className="neu-input neu-shortcut-capture">
+                キーを入力してください...
+              </div>
+            ) : (
+              <div
+                className="neu-shortcut-display"
+                onClick={() => setIsCapturingShortcut(true)}
+                role="button"
+                tabIndex={0}
+              >
+                <span className="neu-hint-text">
+                  {formatShortcutDisplay(settings.shortcut)}
+                </span>
+                <span className="neu-shortcut-edit-hint">クリックで変更</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -378,7 +460,7 @@ function App() {
         <footer className="neu-footer">
           <div className="neu-status">
             <span className="neu-status-dot"></span>
-            {settings.provider === "ollama" ? "Ollama" : "LM Studio"} · {settings.model}
+            {settings.provider === "ollama" ? "Ollama" : "LM Studio"} · {settings.model} · {formatShortcutDisplay(settings.shortcut)}
           </div>
         </footer>
       </div>
