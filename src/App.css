@@ -10,9 +10,9 @@
   /* Base Colors */
   --bg-base: #e8eef5;
   --bg-raised: #e8eef5;
-  --text-primary: #2d3748;
-  --text-secondary: #718096;
-  --text-muted: #a0aec0;
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #8a95a5;
   --accent: #4a5568;
   --accent-light: #718096;
 
@@ -30,6 +30,26 @@
     inset 6px 6px 12px rgba(163, 177, 198, 0.6),
     inset -6px -6px 12px rgba(255, 255, 255, 0.8);
 
+  /* Error Colors */
+  --error-text: #c53030;
+  --error-bg: #fed7d7;
+  --error-stroke: #c53030;
+
+  /* Hover Overlay */
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+
+  /* Shortcut Badge */
+  --shortcut-bg: rgba(0, 0, 0, 0.04);
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+  /* Select Hover Shadow */
+  --shadow-raised-hover:
+    6px 6px 12px rgba(163, 177, 198, 0.7),
+    -6px -6px 12px rgba(255, 255, 255, 0.9);
+
   /* Typography */
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 15px;
@@ -42,6 +62,45 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+  --bg-base: #2b3140;
+  --bg-raised: #2b3140;
+  --text-primary: #f0f4f8;
+  --text-secondary: #b4c1d0;
+  --text-muted: #7b8a9e;
+  --accent: #b4c1d0;
+  --accent-light: #9dafc0;
+
+  --shadow-raised:
+    8px 8px 16px rgba(0, 0, 0, 0.4),
+    -8px -8px 16px rgba(255, 255, 255, 0.03);
+  --shadow-raised-sm:
+    4px 4px 8px rgba(0, 0, 0, 0.35),
+    -4px -4px 8px rgba(255, 255, 255, 0.025);
+  --shadow-inset:
+    inset 4px 4px 8px rgba(0, 0, 0, 0.35),
+    inset -4px -4px 8px rgba(255, 255, 255, 0.025);
+  --shadow-inset-deep:
+    inset 6px 6px 12px rgba(0, 0, 0, 0.4),
+    inset -6px -6px 12px rgba(255, 255, 255, 0.03);
+
+  --error-text: #fc8181;
+  --error-bg: rgba(252, 129, 129, 0.15);
+  --error-stroke: #fc8181;
+
+  --hover-overlay: rgba(255, 255, 255, 0.05);
+
+  --shortcut-bg: rgba(255, 255, 255, 0.08);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+
+  --shadow-raised-hover:
+    6px 6px 12px rgba(0, 0, 0, 0.45),
+    -6px -6px 12px rgba(255, 255, 255, 0.035);
 }
 
 /* ========================================
@@ -175,7 +234,7 @@ body {
 }
 
 .neu-card-action:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--hover-overlay);
   color: var(--text-primary);
 }
 
@@ -255,9 +314,7 @@ body {
 }
 
 .neu-select:hover {
-  box-shadow:
-    6px 6px 12px rgba(163, 177, 198, 0.7),
-    -6px -6px 12px rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-raised-hover);
 }
 
 .neu-select:active,
@@ -297,9 +354,7 @@ body {
 }
 
 .neu-btn-primary:hover:not(:disabled) {
-  box-shadow:
-    6px 6px 12px rgba(163, 177, 198, 0.7),
-    -6px -6px 12px rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-raised-hover);
 }
 
 .neu-btn-primary:active:not(:disabled) {
@@ -315,7 +370,7 @@ body {
   font-size: 11px;
   font-weight: 400;
   color: var(--text-muted);
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--shortcut-bg);
   padding: 3px 8px;
   border-radius: 6px;
   font-family: 'JetBrains Mono', monospace;
@@ -365,18 +420,19 @@ body {
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: #c53030;
+  color: var(--error-text);
 }
 
 .neu-error-icon {
   width: 32px;
   height: 32px;
   border-radius: 10px;
-  background: #fed7d7;
+  background: var(--error-bg);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  color: var(--error-stroke);
 }
 
 /* Footer */
@@ -587,6 +643,36 @@ body {
   transition: opacity 0.2s ease;
 }
 
+/* Theme Toggle */
+.neu-theme-toggle {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-raised-sm);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.neu-theme-toggle:hover {
+  color: var(--text-primary);
+}
+
+.neu-theme-toggle:active {
+  box-shadow: var(--shadow-inset);
+}
+
+.neu-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ========================================
    Animations
    ======================================== */
@@ -624,10 +710,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--scrollbar-thumb-hover);
 }
