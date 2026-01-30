@@ -110,14 +110,11 @@ npm run tauri dev
 
 # ビルド
 npm run tauri build
+
+# アイコン生成（SVGから全サイズのPNG/ICOを生成）
+node scripts/generate-icons.mjs
 ```
 
-## ライセンス
+### アイコンのカスタマイズ
 
-MIT License
-
-## 謝辞
-
-- [Tauri](https://tauri.app/) - 軽量なデスクトップアプリフレームワーク
-- [Ollama](https://ollama.ai/) - ローカルLLM実行環境
-- [LM Studio](https://lmstudio.ai/) - ローカルLLM GUI
+アプリアイコンを変更する場合は `src-tauri/icons/icon.svg` を編集し、上記コマンドで再生成してください。

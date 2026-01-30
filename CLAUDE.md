@@ -13,9 +13,15 @@ npm run dev          # Viteフロントエンド開発サーバー起動（port 
 npm run build        # TypeScriptコンパイル + Viteビルド
 npm run tauri dev    # Tauriアプリとして開発起動（フロントエンド+Rustバックエンド同時起動）
 npm run tauri build  # プロダクションビルド（beforeBuildCommandでnpm run buildが自動実行される）
+
+node scripts/generate-icons.mjs  # SVGからアイコン一括生成（PNG + ICO）
 ```
 
 リンター・フォーマッター・テストフレームワークは未導入。
+
+## アイコン
+
+アプリアイコンは `src-tauri/icons/icon.svg` をソースとして管理。SVGを編集後、`node scripts/generate-icons.mjs` で全サイズのPNG/ICOを自動生成。
 
 ## アーキテクチャ
 
