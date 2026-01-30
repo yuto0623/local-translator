@@ -1,5 +1,9 @@
 # Local Translator
 
+<p align="center">
+  <img src="docs/thumbnail.png" width="600" alt="Local Translator">
+</p>
+
 ローカルLLMサーバー（Ollama / LM Studio）を利用したプライバシー重視のデスクトップ翻訳アプリです。インターネット接続不要で、すべての翻訳処理がローカル環境で完結します。
 
 ## 特徴
