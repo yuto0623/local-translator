@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS: Settings = {
   endpoint: "http://localhost:11434",
   model: "llama3",
   targetLang: "Japanese",
-  shortcut: "Ctrl+Shift+T",
+  shortcut: "Ctrl+Alt+L",
 };
 
 function mapKeyToShortcutString(code: string): string | null {
