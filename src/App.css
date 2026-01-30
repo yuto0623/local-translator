@@ -1126,6 +1126,11 @@ body {
 .neu-history-time {
   font-size: 10px;
   color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.neu-history-item:hover .neu-history-time {
+  transform: translateX(-30px);
 }
 
 .neu-history-source {
