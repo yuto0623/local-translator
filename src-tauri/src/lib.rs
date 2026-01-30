@@ -89,7 +89,10 @@ Text to translate:
 
 #[tauri::command]
 async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<TranslateResponse, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let prompt = build_translation_prompt(&request.text, &request.source_lang, &request.target_lang);
 
     let mut full_text = String::new();
@@ -347,7 +350,7 @@ async fn update_shortcut(
     // 旧ショートカットを解除
     {
         let state = app.state::<CurrentShortcut>();
-        let guard = state.0.lock().unwrap();
+        let guard = state.0.lock().map_err(|e| format!("Failed to lock shortcut state: {}", e))?;
         if let Some(old) = *guard {
             let _ = app.global_shortcut().unregister(old);
         }
@@ -359,7 +362,7 @@ async fn update_shortcut(
     // ステートを更新
     {
         let state = app.state::<CurrentShortcut>();
-        let mut guard = state.0.lock().unwrap();
+        let mut guard = state.0.lock().map_err(|e| format!("Failed to lock shortcut state: {}", e))?;
         *guard = Some(new_shortcut);
     }
 
