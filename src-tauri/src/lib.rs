@@ -6,6 +6,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, WebviewWindow,
 };
+use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 struct CurrentShortcut(Mutex<Option<Shortcut>>);
@@ -276,6 +277,29 @@ fn register_translate_shortcut(
 }
 
 #[tauri::command]
+async fn get_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch()
+        .is_enabled()
+        .map_err(|e| format!("Failed to get autostart status: {}", e))
+}
+
+#[tauri::command]
+async fn set_autostart_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let autostart = app.autolaunch();
+    if enabled {
+        autostart
+            .enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))
+    } else {
+        autostart
+            .disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))
+    }
+}
+
+#[tauri::command]
 async fn update_shortcut(
     app: tauri::AppHandle,
     shortcut: String,
@@ -319,6 +343,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .setup(|app| {
             // システムトレイアイコンのセットアップ
             let show_item = MenuItem::with_id(app, "show", "表示", true, None::<&str>)?;
@@ -369,7 +397,9 @@ pub fn run() {
             translate,
             get_clipboard_text,
             set_clipboard_text,
-            update_shortcut
+            update_shortcut,
+            get_autostart_enabled,
+            set_autostart_enabled
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

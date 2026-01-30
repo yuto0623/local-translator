@@ -140,6 +140,7 @@ function App() {
     return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
   });
   const [isCapturingShortcut, setIsCapturingShortcut] = useState(false);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("translator-theme") as "light" | "dark") || "light";
   });
@@ -149,8 +150,25 @@ function App() {
     localStorage.setItem("translator-theme", theme);
   }, [theme]);
 
+  // 自動起動の状態を読み込む
+  useEffect(() => {
+    invoke<boolean>("get_autostart_enabled")
+      .then(setAutostartEnabled)
+      .catch((e) => console.error("Failed to get autostart status:", e));
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  const toggleAutostart = async () => {
+    const newValue = !autostartEnabled;
+    try {
+      await invoke("set_autostart_enabled", { enabled: newValue });
+      setAutostartEnabled(newValue);
+    } catch (e) {
+      setError(`自動起動の設定に失敗しました: ${e}`);
+    }
   };
 
   // 自動翻訳用のフラグ
@@ -362,6 +380,22 @@ function App() {
               </div>
             </div>
           </div>
+
+          <div className="neu-form-group">
+              <label className="neu-form-label">Startup</label>
+              <div
+                className={`neu-toggle ${autostartEnabled ? "neu-toggle-active" : ""}`}
+                onClick={toggleAutostart}
+                role="switch"
+                aria-checked={autostartEnabled}
+                tabIndex={0}
+              >
+                <span className="neu-toggle-slider"></span>
+                <span className="neu-toggle-label">
+                  {autostartEnabled ? "PC起動時に自動起動する" : "自動起動しない"}
+                </span>
+              </div>
+            </div>
 
           <div className="neu-hint">
             <p className="neu-hint-title">Hotkey</p>
