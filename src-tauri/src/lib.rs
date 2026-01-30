@@ -347,6 +347,13 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             Some(vec!["--minimized"]),
         ))
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // 2つ目のインスタンスが起動しようとした場合、既存のウィンドウを表示
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .setup(|app| {
             // システムトレイアイコンのセットアップ
             let show_item = MenuItem::with_id(app, "show", "表示", true, None::<&str>)?;
