@@ -16,6 +16,14 @@ interface TranslateResponse {
   detected_lang: string | null;
 }
 
+interface HistoryItem {
+  id: string;
+  sourceText: string;
+  translatedText: string;
+  targetLang: string;
+  timestamp: number;
+}
+
 const LANGUAGES = [
   { code: "Japanese", label: "日本語" },
   { code: "English", label: "English" },
@@ -129,6 +137,20 @@ const MoonIcon = () => (
   </svg>
 );
 
+const HistoryIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  </svg>
+);
+
 function App() {
   const [sourceText, setSourceText] = useState("");
   const [translatedText, setTranslatedText] = useState("");
@@ -144,6 +166,11 @@ function App() {
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     return (localStorage.getItem("translator-theme") as "light" | "dark") || "light";
   });
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    const saved = localStorage.getItem("translator-history");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -177,6 +204,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("translator-settings", JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem("translator-history", JSON.stringify(history));
+  }, [history]);
 
   // 起動時にグローバルショートカットを登録
   useEffect(() => {
@@ -220,6 +251,17 @@ function App() {
     return () => window.removeEventListener("keydown", handler, true);
   }, [isCapturingShortcut]);
 
+  const addToHistory = useCallback((sourceText: string, translatedText: string, targetLang: string) => {
+    const newItem: HistoryItem = {
+      id: Date.now().toString(),
+      sourceText,
+      translatedText,
+      targetLang,
+      timestamp: Date.now(),
+    };
+    setHistory((prev) => [newItem, ...prev].slice(0, 50)); // 最大50件
+  }, []);
+
   const handleTranslate = useCallback(async (textToTranslate?: string) => {
     const text = textToTranslate || sourceText;
     if (!text.trim()) return;
@@ -229,7 +271,7 @@ function App() {
     setTranslatedText("");
 
     try {
-      await invoke<TranslateResponse>("translate", {
+      const response = await invoke<TranslateResponse>("translate", {
         request: {
           text: text,
           source_lang: "auto",
@@ -239,12 +281,16 @@ function App() {
           model: settings.model,
         },
       });
+      // 履歴に追加
+      if (response.translated_text.trim()) {
+        addToHistory(text, response.translated_text, settings.targetLang);
+      }
     } catch (e) {
       setError(e as string);
     } finally {
       setIsLoading(false);
     }
-  }, [sourceText, settings]);
+  }, [sourceText, settings, addToHistory]);
 
   // ストリーミングチャンクを受信
   useEffect(() => {
@@ -302,6 +348,37 @@ function App() {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       handleTranslate();
     }
+  };
+
+  const handleSelectHistory = (item: HistoryItem) => {
+    setSourceText(item.sourceText);
+    setTranslatedText(item.translatedText);
+    setSettings((prev) => ({ ...prev, targetLang: item.targetLang }));
+    setShowHistory(false);
+  };
+
+  const handleDeleteHistory = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const handleClearHistory = () => {
+    setHistory([]);
+  };
+
+  const formatTimestamp = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "たった今";
+    if (diffMins < 60) return `${diffMins}分前`;
+    if (diffHours < 24) return `${diffHours}時間前`;
+    if (diffDays < 7) return `${diffDays}日前`;
+    return date.toLocaleDateString("ja-JP");
   };
 
   // Settings Page
@@ -454,6 +531,13 @@ function App() {
               {theme === "light" ? <MoonIcon /> : <SunIcon />}
             </button>
             <button
+              onClick={() => setShowHistory(true)}
+              className="neu-history-btn"
+              aria-label="History"
+            >
+              <HistoryIcon />
+            </button>
+            <button
               onClick={() => setShowSettings(true)}
               className="neu-settings-btn"
               aria-label="Settings"
@@ -559,6 +643,65 @@ function App() {
           </div>
         </footer>
       </div>
+
+      {/* History Sidebar */}
+      <div className={`neu-sidebar-overlay ${showHistory ? "neu-sidebar-overlay-visible" : ""}`} onClick={() => setShowHistory(false)} />
+      <aside className={`neu-sidebar ${showHistory ? "neu-sidebar-open" : ""}`}>
+        <header className="neu-sidebar-header">
+          <h2 className="neu-sidebar-title">History</h2>
+          <div className="neu-header-actions">
+            {history.length > 0 && (
+              <button
+                onClick={handleClearHistory}
+                className="neu-clear-btn"
+                aria-label="Clear all history"
+              >
+                <TrashIcon />
+              </button>
+            )}
+            <button
+              onClick={() => setShowHistory(false)}
+              className="neu-close-btn"
+              aria-label="Close history"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+        </header>
+
+        <div className="neu-sidebar-content">
+          {history.length === 0 ? (
+            <div className="neu-history-empty">
+              <HistoryIcon />
+              <p>翻訳履歴はありません</p>
+            </div>
+          ) : (
+            history.map((item) => (
+              <div
+                key={item.id}
+                className="neu-history-item"
+                onClick={() => handleSelectHistory(item)}
+              >
+                <div className="neu-history-item-header">
+                  <span className="neu-history-lang">
+                    → {LANGUAGES.find((l) => l.code === item.targetLang)?.label || item.targetLang}
+                  </span>
+                  <span className="neu-history-time">{formatTimestamp(item.timestamp)}</span>
+                </div>
+                <div className="neu-history-source">{item.sourceText}</div>
+                <div className="neu-history-result">{item.translatedText}</div>
+                <button
+                  className="neu-history-delete"
+                  onClick={(e) => handleDeleteHistory(item.id, e)}
+                  aria-label="Delete this history item"
+                >
+                  <TrashIcon />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
     </div>
   );
 }
