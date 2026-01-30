@@ -226,9 +226,10 @@ function App() {
 
     setIsLoading(true);
     setError(null);
+    setTranslatedText("");
 
     try {
-      const response = await invoke<TranslateResponse>("translate", {
+      await invoke<TranslateResponse>("translate", {
         request: {
           text: text,
           source_lang: "auto",
@@ -238,13 +239,23 @@ function App() {
           model: settings.model,
         },
       });
-      setTranslatedText(response.translated_text);
     } catch (e) {
       setError(e as string);
     } finally {
       setIsLoading(false);
     }
   }, [sourceText, settings]);
+
+  // ストリーミングチャンクを受信
+  useEffect(() => {
+    const unlisten = listen<string>("translation-chunk", (event) => {
+      setTranslatedText((prev) => prev + event.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   // ホットキーからの選択テキスト受信と自動翻訳
   useEffect(() => {

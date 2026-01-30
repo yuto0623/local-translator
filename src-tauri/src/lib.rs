@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -35,8 +36,9 @@ struct OllamaRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct OllamaResponse {
+struct OllamaStreamResponse {
     response: String,
+    done: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -46,20 +48,26 @@ struct OpenAIMessage {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct OpenAIRequest {
+struct OpenAIStreamRequest {
     model: String,
     messages: Vec<OpenAIMessage>,
     temperature: f32,
+    stream: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct OpenAIChoice {
-    message: OpenAIMessage,
+struct OpenAIDelta {
+    content: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct OpenAIResponse {
-    choices: Vec<OpenAIChoice>,
+struct OpenAIStreamChoice {
+    delta: OpenAIDelta,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenAIStreamResponse {
+    choices: Vec<OpenAIStreamChoice>,
 }
 
 fn build_translation_prompt(text: &str, source_lang: &str, target_lang: &str) -> String {
@@ -80,15 +88,17 @@ Text to translate:
 }
 
 #[tauri::command]
-async fn translate(request: TranslateRequest) -> Result<TranslateResponse, String> {
+async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<TranslateResponse, String> {
     let client = reqwest::Client::new();
     let prompt = build_translation_prompt(&request.text, &request.source_lang, &request.target_lang);
 
-    let translated_text = if request.provider == "ollama" {
+    let mut full_text = String::new();
+
+    if request.provider == "ollama" {
         let ollama_req = OllamaRequest {
             model: request.model.clone(),
             prompt,
-            stream: false,
+            stream: true,
         };
 
         let response = client
@@ -100,15 +110,28 @@ async fn translate(request: TranslateRequest) -> Result<TranslateResponse, Strin
             .error_for_status()
             .map_err(|e| format!("API error: {}", e))?;
 
-        let ollama_res: OllamaResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse response: {}", e))?;
+        let mut stream = response.bytes_stream();
 
-        ollama_res.response.trim().to_string()
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+            let text = String::from_utf8_lossy(&chunk);
+
+            for line in text.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+
+                if let Ok(parsed) = serde_json::from_str::<OllamaStreamResponse>(line) {
+                    if !parsed.response.is_empty() {
+                        full_text.push_str(&parsed.response);
+                        let _ = app.emit("translation-chunk", &parsed.response);
+                    }
+                }
+            }
+        }
     } else {
         // LM Studio / OpenAI compatible API
-        let openai_req = OpenAIRequest {
+        let openai_req = OpenAIStreamRequest {
             model: request.model.clone(),
             messages: vec![
                 OpenAIMessage {
@@ -121,6 +144,7 @@ async fn translate(request: TranslateRequest) -> Result<TranslateResponse, Strin
                 },
             ],
             temperature: 0.3,
+            stream: true,
         };
 
         let response = client
@@ -132,20 +156,34 @@ async fn translate(request: TranslateRequest) -> Result<TranslateResponse, Strin
             .error_for_status()
             .map_err(|e| format!("API error: {}", e))?;
 
-        let openai_res: OpenAIResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse response: {}", e))?;
+        let mut stream = response.bytes_stream();
 
-        openai_res
-            .choices
-            .first()
-            .map(|c| c.message.content.trim().to_string())
-            .unwrap_or_default()
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+            let text = String::from_utf8_lossy(&chunk);
+
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line == "data: [DONE]" {
+                    continue;
+                }
+
+                if let Some(json_str) = line.strip_prefix("data: ") {
+                    if let Ok(parsed) = serde_json::from_str::<OpenAIStreamResponse>(json_str) {
+                        if let Some(choice) = parsed.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                full_text.push_str(content);
+                                let _ = app.emit("translation-chunk", content);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     };
 
     Ok(TranslateResponse {
-        translated_text,
+        translated_text: full_text.trim().to_string(),
         detected_lang: None,
     })
 }
