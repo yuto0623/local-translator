@@ -158,8 +158,12 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<Settings>(() => {
-    const saved = localStorage.getItem("translator-settings");
-    return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    try {
+      const saved = localStorage.getItem("translator-settings");
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    } catch {
+      return DEFAULT_SETTINGS;
+    }
   });
   const [isCapturingShortcut, setIsCapturingShortcut] = useState(false);
   const [autostartEnabled, setAutostartEnabled] = useState(false);
@@ -167,8 +171,12 @@ function App() {
     return (localStorage.getItem("translator-theme") as "light" | "dark") || "light";
   });
   const [history, setHistory] = useState<HistoryItem[]>(() => {
-    const saved = localStorage.getItem("translator-history");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem("translator-history");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
   });
   const [showHistory, setShowHistory] = useState(false);
 

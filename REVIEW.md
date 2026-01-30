@@ -6,30 +6,7 @@ Tauri v2 + React 19 + TypeScript構成のローカルLLM翻訳デスクトップ
 
 ---
 
-## 1. セキュリティ (重要度: 高)
-
-### CSPが無効化されている
-
-`src-tauri/tauri.conf.json:26` で `"csp": null` に設定されている。ローカルアプリであっても、Content Security Policyを適切に設定すべき。悪意のあるスクリプトインジェクションへの防御がない状態。
-
-### HTTPリクエストにタイムアウトが未設定
-
-`src-tauri/src/lib.rs:92` で `reqwest::Client::new()` をそのまま使用しており、タイムアウトが設定されていない。LLMサーバーが応答しない場合、アプリが無期限にハングする。
-
-```rust
-// 現状
-let client = reqwest::Client::new();
-
-// 推奨
-let client = reqwest::Client::builder()
-    .timeout(std::time::Duration::from_secs(120))
-    .build()
-    .map_err(|e| format!("Failed to create client: {}", e))?;
-```
-
-### Mutexの`unwrap()`
-
-`src-tauri/src/lib.rs:350`, `lib.rs:362` — Mutex lockに`.unwrap()`を使用。パニックでロックが毒された場合、アプリがクラッシュする。
+## ~~1. セキュリティ (重要度: 高)~~ 修正済み
 
 ---
 
@@ -39,25 +16,9 @@ let client = reqwest::Client::builder()
 
 `src/App.tsx:81-93` — `PasteIcon`と`CopyIcon`が完全に同じSVGを描画している。`CopyIcon`はクリップボードからコピーするアイコンとして別のデザインにすべき。
 
-### localStorageのJSON.parseが無防備
+### ~~localStorageのJSON.parseが無防備~~ 修正済み
 
-`src/App.tsx:161-162`, `App.tsx:170-171` — `JSON.parse(saved)` にtry-catchがない。localStorageが破損した場合、アプリの起動時にクラッシュする。
-
-```typescript
-// 現状
-const saved = localStorage.getItem("translator-settings");
-return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
-
-// 推奨
-try {
-  const saved = localStorage.getItem("translator-settings");
-  return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
-} catch {
-  return DEFAULT_SETTINGS;
-}
-```
-
-### ストリームのチャンク分割問題
+###ストリームのチャンク分割問題
 
 `src-tauri/src/lib.rs:115-131` — バイトストリームのチャンクがJSONオブジェクトの途中で分割される可能性がある。`if let Ok(parsed)` で静かに失敗するが、その場合データが欠落する。バッファリング処理を入れるべき。
 
@@ -139,9 +100,9 @@ ESLint、Prettier等が未設定。TypeScriptの`strict`モードは有効だが
 
 | 優先度 | 項目 | ファイル |
 |--------|------|----------|
-| **高** | HTTPタイムアウト追加 | `src-tauri/src/lib.rs` |
-| **高** | localStorage JSON.parseのtry-catch | `src/App.tsx` |
-| **高** | CSPの適切な設定 | `src-tauri/tauri.conf.json` |
+| ~~**高**~~ | ~~HTTPタイムアウト追加~~ | ~~`src-tauri/src/lib.rs`~~ |
+| ~~**高**~~ | ~~localStorage JSON.parseのtry-catch~~ | ~~`src/App.tsx`~~ |
+| ~~**高**~~ | ~~CSPの適切な設定~~ | ~~`src-tauri/tauri.conf.json`~~ |
 | **中** | reqwest::Clientの再利用 | `src-tauri/src/lib.rs` |
 | **中** | ストリームチャンクのバッファリング | `src-tauri/src/lib.rs` |
 | **中** | CopyIconのSVG修正 | `src/App.tsx` |
