@@ -492,9 +492,9 @@ body {
 }
 
 .neu-close-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   background: var(--bg-raised);
   box-shadow: var(--shadow-raised-sm);
   border: none;
@@ -789,4 +789,155 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
+}
+
+/* ========================================
+   Responsive Design
+   ======================================== */
+
+/* Small windows / Compact mode */
+@media (max-width: 480px) {
+  .neu-app,
+  .neu-settings {
+    padding: 16px;
+  }
+
+  .neu-container,
+  .neu-settings-container {
+    max-width: 100%;
+  }
+
+  .neu-header,
+  .neu-settings-header {
+    margin-bottom: 20px;
+  }
+
+  .neu-logo-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .neu-logo-text {
+    font-size: 18px;
+  }
+
+  .neu-settings-btn,
+  .neu-theme-toggle,
+  .neu-close-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .neu-card {
+    border-radius: 18px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .neu-textarea,
+  .neu-result {
+    min-height: 80px;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 14px;
+  }
+
+  .neu-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .neu-select-wrapper {
+    width: 100%;
+  }
+
+  .neu-select {
+    width: 100%;
+    padding: 12px 36px 12px 14px;
+    border-radius: 12px;
+  }
+
+  .neu-btn-primary {
+    width: 100%;
+    padding: 12px 20px;
+    border-radius: 12px;
+  }
+
+  .neu-btn-shortcut {
+    display: none;
+  }
+
+  .neu-error {
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .neu-status {
+    padding: 8px 14px;
+    font-size: 11px;
+  }
+
+  .neu-form-group {
+    margin-bottom: 16px;
+  }
+
+  .neu-input,
+  .neu-form-select {
+    padding: 12px 14px;
+    border-radius: 12px;
+  }
+
+  .neu-hint {
+    padding: 14px;
+    border-radius: 12px;
+  }
+
+  .neu-toggle {
+    padding: 10px 14px;
+    border-radius: 12px;
+  }
+}
+
+/* Medium windows */
+@media (min-width: 481px) and (max-width: 600px) {
+  .neu-app,
+  .neu-settings {
+    padding: 20px;
+  }
+
+  .neu-container,
+  .neu-settings-container {
+    max-width: 100%;
+  }
+}
+
+/* Height-based adjustments for very short windows */
+@media (max-height: 500px) {
+  .neu-app,
+  .neu-settings {
+    padding: 12px;
+  }
+
+  .neu-header,
+  .neu-settings-header {
+    height: 40px;
+    margin-bottom: 16px;
+  }
+
+  .neu-card {
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .neu-textarea,
+  .neu-result {
+    min-height: 60px;
+  }
+
+  .neu-footer {
+    padding: 10px 0;
+  }
 }
