@@ -12,7 +12,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [windows-latest]
+        include:
+          - platform: windows-latest
+            args: ''
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
 
     runs-on: ${{ matrix.platform }}
 
@@ -29,6 +33,12 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Add Rust targets (macOS universal binary)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          rustup target add aarch64-apple-darwin
+          rustup target add x86_64-apple-darwin
+
       - name: Install dependencies
         run: npm ci
 
@@ -43,10 +53,17 @@ jobs:
             ## ダウンロード
 
             - **Windows**: `.msi` または `.exe` をダウンロードしてインストール
+            - **macOS**: `.dmg` をダウンロードしてインストール（Intel / Apple Silicon 両対応）
 
             ## 動作要件
 
-            - Windows 10/11
+            - Windows 10/11 または macOS 12+
             - [Ollama](https://ollama.ai/) または [LM Studio](https://lmstudio.ai/)
+
+            ## macOSでの注意事項
+
+            署名なしのため、初回起動時にGatekeeperの警告が表示されます。
+            右クリック →「開く」→「開く」で起動できます。
           releaseDraft: false
           prerelease: false
+          args: ${{ matrix.args }}

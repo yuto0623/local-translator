@@ -27,9 +27,10 @@ node scripts/generate-icons.mjs  # SVGからアイコン一括生成（PNG + ICO
 
 GitHub Actionsでリリース自動化（`.github/workflows/release.yml`）。
 - **トリガー**: `v*` タグのpush（例: `v1.0.1`）
-- **ビルド対象**: Windows（`windows-latest`）のみ
-- **成果物**: `.msi` / `.exe` をGitHub Releaseに自動アップロード
+- **ビルド対象**: Windows（`windows-latest`）+ macOS（`macos-latest`、Universal Binary）
+- **成果物**: Windows → `.msi` / `.exe`、macOS → `.dmg`（Intel + Apple Silicon対応）をGitHub Releaseに自動アップロード
 - **手順**: Node.js v20 + Rust stable → `npm ci` → `tauri-apps/tauri-action`
+- **macOS**: `--target universal-apple-darwin` で両アーキテクチャ対応。未署名のため初回起動時は右クリック→「開く」が必要
 
 ## アイコン
 
