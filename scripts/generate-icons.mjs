@@ -2,7 +2,8 @@ import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,5 +46,33 @@ for (const { name, size } of sizes) {
 const icoBuffer = await pngToIco(join(iconsDir, 'icon.png'));
 writeFileSync(join(iconsDir, 'icon.ico'), icoBuffer);
 console.log('  icon.ico');
+
+// Generate ICNS (macOS) using iconutil
+const iconsetDir = join(iconsDir, 'icon.iconset');
+mkdirSync(iconsetDir, { recursive: true });
+
+const icnsSizes = [
+  { name: 'icon_16x16.png', size: 16 },
+  { name: 'icon_16x16@2x.png', size: 32 },
+  { name: 'icon_32x32.png', size: 32 },
+  { name: 'icon_32x32@2x.png', size: 64 },
+  { name: 'icon_128x128.png', size: 128 },
+  { name: 'icon_128x128@2x.png', size: 256 },
+  { name: 'icon_256x256.png', size: 256 },
+  { name: 'icon_256x256@2x.png', size: 512 },
+  { name: 'icon_512x512.png', size: 512 },
+  { name: 'icon_512x512@2x.png', size: 1024 },
+];
+
+for (const { name, size } of icnsSizes) {
+  await sharp(svgBuffer)
+    .resize(size, size)
+    .png()
+    .toFile(join(iconsetDir, name));
+}
+
+execSync(`iconutil --convert icns --output "${join(iconsDir, 'icon.icns')}" "${iconsetDir}"`);
+rmSync(iconsetDir, { recursive: true });
+console.log('  icon.icns');
 
 console.log('\nDone!');
