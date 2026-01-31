@@ -34,12 +34,14 @@ const LANGUAGES = [
   { code: "Spanish", label: "Español" },
 ];
 
+const isMac = navigator.platform.toUpperCase().includes("MAC");
+
 const DEFAULT_SETTINGS: Settings = {
   provider: "ollama",
   endpoint: "http://localhost:11434",
   model: "llama3",
   targetLang: "Japanese",
-  shortcut: "Ctrl+Alt+L",
+  shortcut: isMac ? "Super+Alt+L" : "Ctrl+Alt+L",
 };
 
 function mapKeyToShortcutString(code: string): string | null {
@@ -58,9 +60,18 @@ function mapKeyToShortcutString(code: string): string | null {
 
 function formatShortcutDisplay(shortcut: string): string {
   return shortcut.split("+").map((part) => {
+    if (isMac) {
+      switch (part) {
+        case "Super": return "⌘";
+        case "Ctrl": return "⌃";
+        case "Alt": return "⌥";
+        case "Shift": return "⇧";
+        default: return part;
+      }
+    }
     if (part === "Super") return "Win";
     return part;
-  }).join(" + ");
+  }).join(isMac ? "" : " + ");
 }
 
 // Icons as SVG components
@@ -607,7 +618,7 @@ function App() {
               <>
                 <TranslateIcon />
                 Translate
-                <span className="neu-btn-shortcut">Ctrl+Enter</span>
+                <span className="neu-btn-shortcut">{isMac ? "⌘+Enter" : "Ctrl+Enter"}</span>
               </>
             )}
           </button>

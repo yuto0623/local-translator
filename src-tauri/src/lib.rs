@@ -300,6 +300,15 @@ fn register_translate_shortcut(
                     .output();
             }
 
+            #[cfg(target_os = "macos")]
+            {
+                use std::process::Command;
+                // AppleScript経由でCmd+Cを送信（選択テキストをコピー）
+                let _ = Command::new("osascript")
+                    .args(["-e", r#"tell application "System Events" to keystroke "c" using command down"#])
+                    .output();
+            }
+
             std::thread::spawn(move || {
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 if let Some(window) = app_handle_inner.get_webview_window("main") {
