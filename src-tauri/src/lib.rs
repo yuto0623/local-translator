@@ -1,4 +1,5 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,20 @@ use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
 
 struct CurrentShortcut(Mutex<Option<Shortcut>>);
+
+struct CancellationFlags {
+    translation: Arc<AtomicBool>,
+    explanation: Arc<AtomicBool>,
+}
+
+impl CancellationFlags {
+    fn new() -> Self {
+        Self {
+            translation: Arc::new(AtomicBool::new(false)),
+            explanation: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TranslateRequest {
@@ -146,6 +161,11 @@ Rules:
 
 #[tauri::command]
 async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<TranslateResponse, String> {
+    // Reset and clone cancellation flag
+    let state = app.state::<CancellationFlags>();
+    state.translation.store(false, Ordering::Relaxed);
+    let cancel_flag = Arc::clone(&state.translation);
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
@@ -173,6 +193,12 @@ async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<T
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
+            // Check cancellation
+            if cancel_flag.load(Ordering::Relaxed) {
+                let _ = app.emit("translation-cancelled", ());
+                return Err("Translation cancelled by user".to_string());
+            }
+
             let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
             let text = String::from_utf8_lossy(&chunk);
 
@@ -219,6 +245,12 @@ async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<T
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
+            // Check cancellation
+            if cancel_flag.load(Ordering::Relaxed) {
+                let _ = app.emit("translation-cancelled", ());
+                return Err("Translation cancelled by user".to_string());
+            }
+
             let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
             let text = String::from_utf8_lossy(&chunk);
 
@@ -250,6 +282,11 @@ async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<T
 
 #[tauri::command]
 async fn explain(app: tauri::AppHandle, request: ExplainRequest) -> Result<ExplainResponse, String> {
+    // Reset and clone cancellation flag
+    let state = app.state::<CancellationFlags>();
+    state.explanation.store(false, Ordering::Relaxed);
+    let cancel_flag = Arc::clone(&state.explanation);
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .build()
@@ -282,6 +319,12 @@ async fn explain(app: tauri::AppHandle, request: ExplainRequest) -> Result<Expla
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
+            // Check cancellation
+            if cancel_flag.load(Ordering::Relaxed) {
+                let _ = app.emit("explanation-cancelled", ());
+                return Err("Explanation cancelled by user".to_string());
+            }
+
             let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
             let text = String::from_utf8_lossy(&chunk);
 
@@ -327,6 +370,12 @@ async fn explain(app: tauri::AppHandle, request: ExplainRequest) -> Result<Expla
         let mut stream = response.bytes_stream();
 
         while let Some(chunk) = stream.next().await {
+            // Check cancellation
+            if cancel_flag.load(Ordering::Relaxed) {
+                let _ = app.emit("explanation-cancelled", ());
+                return Err("Explanation cancelled by user".to_string());
+            }
+
             let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
             let text = String::from_utf8_lossy(&chunk);
 
@@ -353,6 +402,20 @@ async fn explain(app: tauri::AppHandle, request: ExplainRequest) -> Result<Expla
     Ok(ExplainResponse {
         explanation: full_text.trim().to_string(),
     })
+}
+
+#[tauri::command]
+async fn cancel_translation(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<CancellationFlags>();
+    state.translation.store(true, Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+async fn cancel_explanation(app: tauri::AppHandle) -> Result<(), String> {
+    let state = app.state::<CancellationFlags>();
+    state.explanation.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 #[tauri::command]
@@ -611,6 +674,7 @@ pub fn run() {
                 .build(app)?;
 
             app.manage(CurrentShortcut(Mutex::new(None)));
+            app.manage(CancellationFlags::new());
 
             Ok(())
         })
@@ -621,7 +685,9 @@ pub fn run() {
             set_clipboard_text,
             update_shortcut,
             get_autostart_enabled,
-            set_autostart_enabled
+            set_autostart_enabled,
+            cancel_translation,
+            cancel_explanation
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

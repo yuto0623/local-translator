@@ -232,6 +232,8 @@ function App() {
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
   const [isExplanationLoading, setIsExplanationLoading] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isExplanationCancelling, setIsExplanationCancelling] = useState(false);
   const explanationCacheRef = useRef<{ source: string; explanation: string } | null>(null);
 
   useEffect(() => {
@@ -380,6 +382,32 @@ function App() {
     };
   }, []);
 
+  // 翻訳キャンセルイベント
+  useEffect(() => {
+    const unlisten = listen("translation-cancelled", () => {
+      setIsLoading(false);
+      setIsCancelling(false);
+      setError("翻訳がキャンセルされました");
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // 解説キャンセルイベント
+  useEffect(() => {
+    const unlisten = listen("explanation-cancelled", () => {
+      setIsExplanationLoading(false);
+      setIsExplanationCancelling(false);
+      setExplanationError("解説がキャンセルされました");
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   const handleExplain = useCallback(async () => {
     if (
       explanationCacheRef.current &&
@@ -423,6 +451,26 @@ function App() {
       handleExplain();
     }
   }, [isExplanationOpen, explanationText, sourceText, handleExplain]);
+
+  const handleCancelTranslation = useCallback(async () => {
+    setIsCancelling(true);
+    try {
+      await invoke("cancel_translation");
+    } catch (e) {
+      console.error("Failed to cancel translation:", e);
+      setIsCancelling(false);
+    }
+  }, []);
+
+  const handleCancelExplanation = useCallback(async () => {
+    setIsExplanationCancelling(true);
+    try {
+      await invoke("cancel_explanation");
+    } catch (e) {
+      console.error("Failed to cancel explanation:", e);
+      setIsExplanationCancelling(false);
+    }
+  }, []);
 
   // ホットキーからの選択テキスト受信と自動翻訳
   useEffect(() => {
@@ -702,28 +750,39 @@ function App() {
             </select>
             <span className="neu-select-arrow"><ChevronIcon /></span>
           </div>
-          <button
-            onClick={() => handleTranslate()}
-            disabled={isLoading || !sourceText.trim()}
-            className="neu-btn-primary"
-          >
-            {isLoading ? (
-              <span className="neu-loading">
-                <span className="neu-loading-dots">
-                  <span className="neu-loading-dot"></span>
-                  <span className="neu-loading-dot"></span>
-                  <span className="neu-loading-dot"></span>
+          {isLoading ? (
+            <button
+              onClick={handleCancelTranslation}
+              disabled={isCancelling}
+              className="neu-btn-cancel"
+            >
+              {isCancelling ? (
+                <span className="neu-loading">
+                  <span className="neu-loading-dots">
+                    <span className="neu-loading-dot"></span>
+                    <span className="neu-loading-dot"></span>
+                    <span className="neu-loading-dot"></span>
+                  </span>
+                  キャンセル中
                 </span>
-                Translating
-              </span>
-            ) : (
-              <>
-                <TranslateIcon />
-                Translate
-                <span className="neu-btn-shortcut">{isMac ? "⌘+Enter" : "Ctrl+Enter"}</span>
-              </>
-            )}
-          </button>
+              ) : (
+                <>
+                  <CloseIcon />
+                  キャンセル
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={() => handleTranslate()}
+              disabled={!sourceText.trim()}
+              className="neu-btn-primary"
+            >
+              <TranslateIcon />
+              Translate
+              <span className="neu-btn-shortcut">{isMac ? "⌘+Enter" : "Ctrl+Enter"}</span>
+            </button>
+          )}
         </div>
 
         {/* Error */}
@@ -781,6 +840,15 @@ function App() {
                       <span className="neu-loading-dot"></span>
                     </span>
                     <span>解説を生成中...</span>
+                    {!isExplanationCancelling && (
+                      <button
+                        onClick={handleCancelExplanation}
+                        className="neu-cancel-small-btn"
+                      >
+                        <CloseIcon />
+                        キャンセル
+                      </button>
+                    )}
                   </div>
                 )}
                 {explanationError && (

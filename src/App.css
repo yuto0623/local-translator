@@ -1409,3 +1409,88 @@ body {
     opacity: 1;
   }
 }
+
+/* ========================================
+   Cancel Buttons
+   ======================================== */
+
+.neu-btn-cancel {
+  flex: 1;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 16px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-raised-sm);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #dc2626;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.neu-btn-cancel:hover:not(:disabled) {
+  box-shadow: var(--shadow-raised-hover);
+}
+
+.neu-btn-cancel:active:not(:disabled) {
+  box-shadow: var(--shadow-inset);
+}
+
+.neu-btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+[data-theme="dark"] .neu-btn-cancel {
+  color: #ef4444;
+}
+
+.neu-cancel-small-btn {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-raised-sm);
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.neu-cancel-small-btn:hover {
+  box-shadow: var(--shadow-raised-hover);
+}
+
+.neu-cancel-small-btn:active {
+  box-shadow: var(--shadow-inset);
+}
+
+[data-theme="dark"] .neu-cancel-small-btn {
+  color: #ef4444;
+}
+
+@media (max-width: 480px) {
+  .neu-btn-cancel {
+    width: 100%;
+    padding: 12px 20px;
+    border-radius: 12px;
+  }
+
+  .neu-cancel-small-btn {
+    padding: 5px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+  }
+}
