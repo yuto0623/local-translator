@@ -53,6 +53,8 @@ GitHub Actionsでリリース自動化（`.github/workflows/release.yml`）。
 ### Rustバックエンド (`src-tauri/src/`)
 - `lib.rs` に主要ロジックが集約。Tauriコマンドとしてフロントエンドに公開:
   - `translate` — Ollama (`/api/generate`) または LM Studio (`/v1/chat/completions`) へHTTPリクエスト
+  - `explain` — 原文の単語・スラング・文脈を解説（ストリーミング対応）
+  - `cancel_translation` — ストリーミング中の翻訳をキャンセル（リクエストID指定）
   - `get_clipboard_text` / `set_clipboard_text` — クリップボード操作
   - `update_shortcut` — グローバルショートカットの動的変更
   - `get_autostart_enabled` / `set_autostart_enabled` — PC起動時の自動起動設定
@@ -72,6 +74,14 @@ GitHub Actionsでリリース自動化（`.github/workflows/release.yml`）。
 - LM Studioはtemperature: 0.3、systemメッセージ付きのOpenAI互換リクエスト
 - 各チャンクは `translation-chunk` イベントでフロントエンドにリアルタイム送信
 
+### キャンセル機能（翻訳のみ）
+- `CancellationFlags`構造体で`AtomicU64`によるリクエストID管理（スレッドセーフ）
+- フロントエンドは翻訳ごとにインクリメントするリクエストIDを発行し、キャンセル時にIDを指定することで競合状態を防止
+- キャンセルイベント: `translation-cancelled`（ペイロードにリクエストIDを含む）
+- キャンセル結果はエラーではなく情報メッセージ（`neu-info`）として表示
+- Escキーでローディング中の翻訳をキャンセル可能
+- フロントエンド側に3秒のタイムアウトフォールバックあり（イベント未到達時の安全策）
+
 ### デフォルト設定
 ```json
 {
@@ -85,6 +95,7 @@ GitHub Actionsでリリース自動化（`.github/workflows/release.yml`）。
 
 ### キーボードショートカット
 - **翻訳実行**: Ctrl+Enter / Cmd+Enter（フロントエンド）
+- **キャンセル**: Escape（翻訳のストリーミング中）
 - **グローバルホットキー**: カスタマイズ可能（修飾キー: Ctrl/Shift/Alt/Super、キー: A-Z, 0-9, F1-F12, Space, Enter, 矢印キー等）
 
 ### データフロー

@@ -35,6 +35,14 @@
   --error-bg: #fed7d7;
   --error-stroke: #c53030;
 
+  /* Info Colors */
+  --info-text: #6b7280;
+  --info-bg: #f3f4f6;
+  --info-stroke: #9ca3af;
+
+  /* Cancel Colors */
+  --cancel-text: #dc2626;
+
   /* Hover Overlay */
   --hover-overlay: rgba(0, 0, 0, 0.04);
 
@@ -90,6 +98,12 @@
   --error-text: #fc8181;
   --error-bg: rgba(252, 129, 129, 0.15);
   --error-stroke: #fc8181;
+
+  --info-text: #9ca3af;
+  --info-bg: rgba(156, 163, 175, 0.15);
+  --info-stroke: #6b7280;
+
+  --cancel-text: #ef4444;
 
   --hover-overlay: rgba(255, 255, 255, 0.05);
 
@@ -1424,7 +1438,7 @@ body {
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: #dc2626;
+  color: var(--cancel-text);
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
@@ -1447,50 +1461,47 @@ body {
   cursor: not-allowed;
 }
 
-[data-theme="dark"] .neu-btn-cancel {
-  color: #ef4444;
-}
-
-.neu-cancel-small-btn {
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: none;
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-raised-sm);
-  color: #dc2626;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-.neu-cancel-small-btn:hover {
-  box-shadow: var(--shadow-raised-hover);
-}
-
-.neu-cancel-small-btn:active {
-  box-shadow: var(--shadow-inset);
-}
-
-[data-theme="dark"] .neu-cancel-small-btn {
-  color: #ef4444;
-}
-
 @media (max-width: 480px) {
   .neu-btn-cancel {
     width: 100%;
     padding: 12px 20px;
     border-radius: 12px;
   }
+}
 
-  .neu-cancel-small-btn {
-    padding: 5px 8px;
-    border-radius: 6px;
-    font-size: 10px;
+/* ========================================
+   Info Message (Cancelled)
+   ======================================== */
+
+.neu-info {
+  background: var(--bg-raised);
+  border-radius: 16px;
+  box-shadow: var(--shadow-raised-sm);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--info-text);
+}
+
+.neu-info-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--info-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--info-stroke);
+}
+
+@media (max-width: 480px) {
+  .neu-info {
+    padding: 12px 14px;
+    border-radius: 12px;
+    font-size: 12px;
   }
 }

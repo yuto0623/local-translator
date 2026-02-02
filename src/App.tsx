@@ -233,8 +233,9 @@ function App() {
   const [isExplanationLoading, setIsExplanationLoading] = useState(false);
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [isExplanationCancelling, setIsExplanationCancelling] = useState(false);
+  const [cancelledInfo, setCancelledInfo] = useState<string | null>(null);
   const explanationCacheRef = useRef<{ source: string; explanation: string } | null>(null);
+  const translationRequestIdRef = useRef<number>(0);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -330,8 +331,10 @@ function App() {
     const text = textToTranslate || sourceText;
     if (!text.trim()) return;
 
+    const requestId = ++translationRequestIdRef.current;
     setIsLoading(true);
     setError(null);
+    setCancelledInfo(null);
     setTranslatedText("");
     setExplanationText("");
     setIsExplanationOpen(false);
@@ -347,6 +350,7 @@ function App() {
           provider: settings.provider,
           endpoint: settings.endpoint,
           model: settings.model,
+          request_id: requestId,
         },
       });
       // 履歴に追加
@@ -384,23 +388,13 @@ function App() {
 
   // 翻訳キャンセルイベント
   useEffect(() => {
-    const unlisten = listen("translation-cancelled", () => {
-      setIsLoading(false);
-      setIsCancelling(false);
-      setError("翻訳がキャンセルされました");
-    });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, []);
-
-  // 解説キャンセルイベント
-  useEffect(() => {
-    const unlisten = listen("explanation-cancelled", () => {
-      setIsExplanationLoading(false);
-      setIsExplanationCancelling(false);
-      setExplanationError("解説がキャンセルされました");
+    const unlisten = listen<number>("translation-cancelled", (event) => {
+      // リクエストIDが一致する場合のみ処理
+      if (event.payload === translationRequestIdRef.current) {
+        setIsLoading(false);
+        setIsCancelling(false);
+        setCancelledInfo("翻訳がキャンセルされました");
+      }
     });
 
     return () => {
@@ -454,23 +448,34 @@ function App() {
 
   const handleCancelTranslation = useCallback(async () => {
     setIsCancelling(true);
+    const timeoutId = setTimeout(() => {
+      // タイムアウト時のフォールバック
+      setIsCancelling(false);
+      setIsLoading(false);
+      setCancelledInfo("翻訳がキャンセルされました");
+    }, 3000);
+
     try {
-      await invoke("cancel_translation");
+      await invoke("cancel_translation", { requestId: translationRequestIdRef.current });
+      clearTimeout(timeoutId);
     } catch (e) {
       console.error("Failed to cancel translation:", e);
+      clearTimeout(timeoutId);
       setIsCancelling(false);
     }
   }, []);
 
-  const handleCancelExplanation = useCallback(async () => {
-    setIsExplanationCancelling(true);
-    try {
-      await invoke("cancel_explanation");
-    } catch (e) {
-      console.error("Failed to cancel explanation:", e);
-      setIsExplanationCancelling(false);
-    }
-  }, []);
+  // Escキーでキャンセル
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isLoading && !isCancelling) {
+        handleCancelTranslation();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isLoading, isCancelling, handleCancelTranslation]);
 
   // ホットキーからの選択テキスト受信と自動翻訳
   useEffect(() => {
@@ -795,6 +800,16 @@ function App() {
           </div>
         )}
 
+        {/* Cancelled Info */}
+        {cancelledInfo && !error && (
+          <div className="neu-info">
+            <div className="neu-info-icon">
+              <CloseIcon />
+            </div>
+            {cancelledInfo}
+          </div>
+        )}
+
         {/* Result Card */}
         <div className="neu-card">
           <div className="neu-card-header">
@@ -840,15 +855,6 @@ function App() {
                       <span className="neu-loading-dot"></span>
                     </span>
                     <span>解説を生成中...</span>
-                    {!isExplanationCancelling && (
-                      <button
-                        onClick={handleCancelExplanation}
-                        className="neu-cancel-small-btn"
-                      >
-                        <CloseIcon />
-                        キャンセル
-                      </button>
-                    )}
                   </div>
                 )}
                 {explanationError && (
