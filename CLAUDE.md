@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ローカルLLMサーバー（Ollama / LM Studio）を利用したデスクトップ翻訳アプリ。Tauri v2（Rust）+ React 19 + TypeScript + Vite構成。
 
-- **バージョン**: 1.0.1（package.json / Cargo.toml / tauri.conf.json で管理）
+- **バージョン**: 1.1.0（package.json / Cargo.toml / tauri.conf.json で管理）
 - **識別子**: `com.translator.app`
 - **対応言語**: 日本語, English, 中文, 한국어, Français, Deutsch, Español（7言語）
 
@@ -45,6 +45,7 @@ GitHub Actionsでリリース自動化（`.github/workflows/release.yml`）。
 - フォント: Outfit（UI）+ JetBrains Mono（等幅）— Google Fontsから読み込み
 - ダークモード対応済み（`data-theme`属性で切替、localStorageに永続化）
 - 翻訳履歴機能: 最大50件保持、相対時刻表示、個別削除・一括クリア対応
+- 原文の解説機能: 翻訳結果下部に「原文の解説」ボタンを配置。クリックすると原文の単語・スラング・文脈を解説（ストリーミング対応、`explanation-chunk`イベント）
 - localStorageキー: `translator-settings`, `translator-theme`, `translator-history`
 - UIページ: メイン（翻訳）/ 設定 / 履歴サイドバー
 - インラインSVGアイコン（Settings, Close, Paste, Copy, Translate, Chevron, Error, Sun, Moon, History, Trash）
@@ -120,10 +121,32 @@ Tauri v2のプラグインシステムを使用。権限設定は `src-tauri/cap
 - `src-tauri/` はファイル監視から除外（`server.watch.ignored`）
 - `clearScreen: false`（Rustのエラーメッセージを保持）
 
+## プラットフォーム対応
+
+### Windows
+- **動作環境**: Windows 10/11
+- **グローバルホットキー**: PowerShell経由でCtrl+Cをシミュレーション（クリップボード連携）
+- **ビルド成果物**: `.msi` / `.exe`
+
+### macOS
+- **動作環境**: macOS 12+
+- **アーキテクチャ**: Universal Binary（Intel + Apple Silicon対応）
+- **制約**: 未署名のため初回起動時は右クリック→「開く」で起動が必要
+- **グローバルホットキー**: AppleScript経由でCmd+Cをシミュレーション（クリップボード連携）
+- **ビルド成果物**: `.dmg`
+
+## ランディングページ
+
+`docs/` にGitHub Pages対応のランディングページが含まれている。
+- **ファイル**: `docs/index.html`
+- **サムネイル**: `docs/thumbnail.png`（READMEで使用）
+- **機能**: GitHub Releasesへの直接ダウンロードリンク、ニューモーフィックデザイン
+- **配信**: `.nojekyll` ファイルにより静的サイトとして配信可能
+
 ## 注意事項
 
 - AI providerの切替はフロントエンドのUI設定から行い、バックエンドは受け取ったprovider名に応じてAPIエンドポイントとリクエスト形式を切り替える
-- グローバルホットキーのクリップボード連携はWindows固有の実装（PowerShell経由）
+- グローバルホットキーのクリップボード連携はプラットフォーム別実装（Windows: PowerShell経由、macOS: AppleScript経由）
 - ウィンドウの閉じるボタンはアプリを終了せずトレイに格納（`on_window_event`でCloseRequestedをインターセプト）
 - トレイアイコンは`lib.rs`の`setup`関数内で`TrayIconBuilder`により作成（`tauri.conf.json`での設定は削除済み）
 - トレイメニューのラベルは日本語（「表示」「隠す」「終了」）
