@@ -16,6 +16,20 @@
   --accent: #4a5568;
   --accent-light: #718096;
 
+  /* Primary Action Accent */
+  --primary-accent: #3b82c8;
+  --primary-accent-text: #2563a0;
+  --primary-bg: linear-gradient(135deg, #e8eef5 0%, #dce6f2 100%);
+  --primary-shadow:
+    4px 4px 8px rgba(148, 168, 196, 0.55),
+    -4px -4px 8px rgba(255, 255, 255, 0.75);
+  --primary-shadow-hover:
+    6px 6px 12px rgba(148, 168, 196, 0.65),
+    -6px -6px 12px rgba(255, 255, 255, 0.85);
+  --primary-shadow-active:
+    inset 3px 3px 6px rgba(148, 168, 196, 0.5),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.7);
+
   /* Neumorphic Shadows */
   --shadow-raised:
     8px 8px 16px rgba(163, 177, 198, 0.6),
@@ -81,6 +95,20 @@
   --text-muted: #7b8a9e;
   --accent: #b4c1d0;
   --accent-light: #9dafc0;
+
+  /* Primary Action Accent */
+  --primary-accent: #60a5fa;
+  --primary-accent-text: #93bbfd;
+  --primary-bg: linear-gradient(135deg, #2b3140 0%, #2f3a4e 100%);
+  --primary-shadow:
+    4px 4px 8px rgba(0, 0, 0, 0.4),
+    -4px -4px 8px rgba(255, 255, 255, 0.03);
+  --primary-shadow-hover:
+    6px 6px 12px rgba(0, 0, 0, 0.5),
+    -6px -6px 12px rgba(255, 255, 255, 0.04);
+  --primary-shadow-active:
+    inset 3px 3px 6px rgba(0, 0, 0, 0.4),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.025);
 
   --shadow-raised:
     8px 8px 16px rgba(0, 0, 0, 0.4),
@@ -490,12 +518,12 @@ body {
   padding: 14px 24px;
   border: none;
   border-radius: 16px;
-  background: var(--bg-raised);
-  box-shadow: var(--shadow-raised-sm);
+  background: var(--primary-bg);
+  box-shadow: var(--primary-shadow);
   font-family: inherit;
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--primary-accent-text);
   cursor: pointer;
   outline: none;
   transition: all 0.2s ease;
@@ -503,19 +531,32 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  position: relative;
+}
+
+.neu-btn-primary svg {
+  color: var(--primary-accent);
+  transition: color 0.2s ease;
 }
 
 .neu-btn-primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-raised-hover);
+  box-shadow: var(--primary-shadow-hover);
+  color: var(--primary-accent);
 }
 
 .neu-btn-primary:active:not(:disabled) {
-  box-shadow: var(--shadow-inset);
+  box-shadow: var(--primary-shadow-active);
 }
 
 .neu-btn-primary:disabled {
   color: var(--text-muted);
   cursor: not-allowed;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-raised-sm);
+}
+
+.neu-btn-primary:disabled svg {
+  color: var(--text-muted);
 }
 
 .neu-btn-shortcut {
