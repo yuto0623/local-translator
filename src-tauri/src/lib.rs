@@ -28,6 +28,21 @@ pub struct TranslateResponse {
     pub detected_lang: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ExplainRequest {
+    pub source_text: String,
+    pub source_lang: String,
+    pub target_lang: String,
+    pub provider: String,
+    pub endpoint: String,
+    pub model: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExplainResponse {
+    pub explanation: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct OllamaRequest {
     model: String,
@@ -84,6 +99,48 @@ Only output the translated text, nothing else. Do not include explanations or no
 Text to translate:
 {}"#,
         source, target_lang, text
+    )
+}
+
+fn build_explanation_prompt(
+    source_text: &str,
+    source_lang: &str,
+    target_lang: &str,
+) -> String {
+    let source = if source_lang == "auto" {
+        "the detected language".to_string()
+    } else {
+        source_lang.to_string()
+    };
+
+    format!(
+        r#"You are a language expert. Analyze the following text written in {source}.
+
+Text:
+{source_text}
+
+IMPORTANT: Write the ENTIRE response in {target_lang} only. All headings, explanations, and descriptions must be in {target_lang}. The only exception is the original words/phrases being explained, which should remain in their original language.
+
+Provide a concise explanation using Markdown format:
+
+## 重要な語彙
+- **word/phrase** — meaning, nuance, and usage explained in {target_lang}
+
+## スラング・慣用句
+- **expression** — meaning, tone, and typical usage context explained in {target_lang}
+
+## 文化的背景
+- Brief notes on cultural background in {target_lang} (if relevant)
+
+Rules:
+- Use Markdown: ## for headings, **bold** for terms, - for list items
+- Write ALL explanations and headings in {target_lang}
+- Be practical and concise
+- If a section has no relevant content, DO NOT include the heading at all — omit it completely
+- NEVER write "N/A", "None", "該当なし", "特にありません" or similar — just omit the section"#,
+        source = source,
+        source_text = source_text,
+        target_lang = target_lang,
     )
 }
 
@@ -188,6 +245,113 @@ async fn translate(app: tauri::AppHandle, request: TranslateRequest) -> Result<T
     Ok(TranslateResponse {
         translated_text: full_text.trim().to_string(),
         detected_lang: None,
+    })
+}
+
+#[tauri::command]
+async fn explain(app: tauri::AppHandle, request: ExplainRequest) -> Result<ExplainResponse, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let prompt = build_explanation_prompt(
+        &request.source_text,
+        &request.source_lang,
+        &request.target_lang,
+    );
+
+    let mut full_text = String::new();
+
+    if request.provider == "ollama" {
+        let ollama_req = OllamaRequest {
+            model: request.model.clone(),
+            prompt,
+            stream: true,
+        };
+
+        let response = client
+            .post(format!("{}/api/generate", request.endpoint))
+            .json(&ollama_req)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send request: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("API error: {}", e))?;
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+            let text = String::from_utf8_lossy(&chunk);
+
+            for line in text.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+
+                if let Ok(parsed) = serde_json::from_str::<OllamaStreamResponse>(line) {
+                    if !parsed.response.is_empty() {
+                        full_text.push_str(&parsed.response);
+                        let _ = app.emit("explanation-chunk", &parsed.response);
+                    }
+                }
+            }
+        }
+    } else {
+        let openai_req = OpenAIStreamRequest {
+            model: request.model.clone(),
+            messages: vec![
+                OpenAIMessage {
+                    role: "system".to_string(),
+                    content: "You are a language expert providing vocabulary and slang explanations. Be concise and practical.".to_string(),
+                },
+                OpenAIMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                },
+            ],
+            temperature: 0.3,
+            stream: true,
+        };
+
+        let response = client
+            .post(format!("{}/v1/chat/completions", request.endpoint))
+            .json(&openai_req)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to send request: {}", e))?
+            .error_for_status()
+            .map_err(|e| format!("API error: {}", e))?;
+
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+            let text = String::from_utf8_lossy(&chunk);
+
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() || line == "data: [DONE]" {
+                    continue;
+                }
+
+                if let Some(json_str) = line.strip_prefix("data: ") {
+                    if let Ok(parsed) = serde_json::from_str::<OpenAIStreamResponse>(json_str) {
+                        if let Some(choice) = parsed.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                full_text.push_str(content);
+                                let _ = app.emit("explanation-chunk", content);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    Ok(ExplainResponse {
+        explanation: full_text.trim().to_string(),
     })
 }
 
@@ -452,6 +616,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             translate,
+            explain,
             get_clipboard_text,
             set_clipboard_text,
             update_shortcut,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import Markdown from "react-markdown";
 import "./App.css";
 
 interface Settings {
@@ -162,6 +163,43 @@ const TrashIcon = () => (
   </svg>
 );
 
+const BookOpenIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+  </svg>
+);
+
+const NA_PATTERNS = /^[-*]?\s*(該当なし|特にありません|特になし|なし|ありません|N\/?A|None|No .+ found|No .+ detected)\.?\s*$/i;
+
+function filterEmptySections(markdown: string): string {
+  const lines = markdown.split("\n");
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    if (/^##\s+/.test(lines[i])) {
+      const heading = lines[i];
+      const sectionLines: string[] = [];
+      i++;
+      while (i < lines.length && !/^##\s+/.test(lines[i])) {
+        sectionLines.push(lines[i]);
+        i++;
+      }
+      const contentLines = sectionLines.filter((l) => l.trim() !== "");
+      const allNA = contentLines.length === 0 || contentLines.every((l) => NA_PATTERNS.test(l.trim()));
+      if (!allNA) {
+        result.push(heading, ...sectionLines);
+      }
+    } else {
+      result.push(lines[i]);
+      i++;
+    }
+  }
+
+  return result.join("\n").trim();
+}
+
 function App() {
   const [sourceText, setSourceText] = useState("");
   const [translatedText, setTranslatedText] = useState("");
@@ -190,6 +228,11 @@ function App() {
     }
   });
   const [showHistory, setShowHistory] = useState(false);
+  const [explanationText, setExplanationText] = useState("");
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [isExplanationLoading, setIsExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const explanationCacheRef = useRef<{ source: string; explanation: string } | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -288,6 +331,10 @@ function App() {
     setIsLoading(true);
     setError(null);
     setTranslatedText("");
+    setExplanationText("");
+    setIsExplanationOpen(false);
+    setExplanationError(null);
+    explanationCacheRef.current = null;
 
     try {
       const response = await invoke<TranslateResponse>("translate", {
@@ -321,6 +368,61 @@ function App() {
       unlisten.then((fn) => fn());
     };
   }, []);
+
+  // 解説ストリーミングチャンクを受信
+  useEffect(() => {
+    const unlisten = listen<string>("explanation-chunk", (event) => {
+      setExplanationText((prev) => prev + event.payload);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const handleExplain = useCallback(async () => {
+    if (
+      explanationCacheRef.current &&
+      explanationCacheRef.current.source === sourceText
+    ) {
+      setExplanationText(explanationCacheRef.current.explanation);
+      return;
+    }
+
+    setIsExplanationLoading(true);
+    setExplanationError(null);
+    setExplanationText("");
+
+    try {
+      const response = await invoke<{ explanation: string }>("explain", {
+        request: {
+          source_text: sourceText,
+          source_lang: "auto",
+          target_lang: settings.targetLang,
+          provider: settings.provider,
+          endpoint: settings.endpoint,
+          model: settings.model,
+        },
+      });
+      explanationCacheRef.current = {
+        source: sourceText,
+        explanation: response.explanation,
+      };
+    } catch (e) {
+      setExplanationError(e as string);
+    } finally {
+      setIsExplanationLoading(false);
+    }
+  }, [sourceText, settings]);
+
+  const toggleExplanation = useCallback(() => {
+    const willOpen = !isExplanationOpen;
+    setIsExplanationOpen(willOpen);
+
+    if (willOpen && !explanationText && sourceText) {
+      handleExplain();
+    }
+  }, [isExplanationOpen, explanationText, sourceText, handleExplain]);
 
   // ホットキーからの選択テキスト受信と自動翻訳
   useEffect(() => {
@@ -653,6 +755,49 @@ function App() {
             )}
           </div>
         </div>
+
+        {/* Explanation Card */}
+        {translatedText && (
+          <div className={`neu-explanation-card ${isExplanationOpen ? "neu-explanation-card-open" : ""}`}>
+            <button
+              className="neu-explanation-toggle"
+              onClick={toggleExplanation}
+              disabled={isLoading}
+            >
+              <BookOpenIcon />
+              <span>原文の解説</span>
+              <span className={`neu-explanation-chevron ${isExplanationOpen ? "neu-explanation-chevron-open" : ""}`}>
+                <ChevronIcon />
+              </span>
+            </button>
+
+            {isExplanationOpen && (
+              <div className="neu-explanation-content">
+                {isExplanationLoading && !explanationText && (
+                  <div className="neu-explanation-loading">
+                    <span className="neu-loading-dots">
+                      <span className="neu-loading-dot"></span>
+                      <span className="neu-loading-dot"></span>
+                      <span className="neu-loading-dot"></span>
+                    </span>
+                    <span>解説を生成中...</span>
+                  </div>
+                )}
+                {explanationError && (
+                  <div className="neu-explanation-error">
+                    <ErrorIcon />
+                    <span>{explanationError}</span>
+                  </div>
+                )}
+                {explanationText && (
+                  <div className="neu-explanation-text">
+                    <Markdown>{filterEmptySections(explanationText)}</Markdown>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer Status */}
         <footer className="neu-footer">
